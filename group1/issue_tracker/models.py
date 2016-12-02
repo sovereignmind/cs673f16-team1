@@ -3,6 +3,23 @@ from django.contrib.auth.models import User
 from django.core.urlresolvers import reverse
 from requirements.models.project import Project
 
+#imports for the use of tokens -DG
+#See: http://cheng.logdown.com/posts/2015/10/27/how-to-use-django-rest-frameworks-token-based-authentication
+
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from rest_framework.authtoken.models import Token
+from django.conf import settings
+
+
+# This code is triggered whenever a new user has been created and saved to the database
+
+@receiver(post_save, sender=settings.AUTH_USER_MODEL)
+def create_auth_token(sender, instance=None, created=False, **kwargs):
+    if created:
+        Token.objects.create(user=instance)
+
+
 OPEN_STATUSES = (
     ('Open-New', 'New',),
     ('Open-Assigned', 'Assigned',),
@@ -66,7 +83,7 @@ class Issue(models.Model):
 
 class IssueComment(models.Model):
     comment = models.TextField(max_length=2000)
-    issue_id = models.ForeignKey(Issue, related_name='comments', blank=True, null=True)
+    issue_id = models.ForeignKey(Issue, related_name='comments', blank=False, null=False) #order them by issue PK -DG
     date = models.DateTimeField(auto_now_add=True, editable=False)
     poster = models.ForeignKey(User, related_name='comments', blank=True, null=True)
     is_comment = models.BooleanField(default=True)
