@@ -3,16 +3,41 @@ import datetime
 
 from django.http import HttpResponseRedirect
 from django.http import HttpResponseForbidden
+from django.http import HttpResponseBadRequest
 from django.views.generic import DetailView
 from django.views.generic import UpdateView
 from django.views.generic import ListView
+from rest_framework import generics
 from django.views.generic.edit import CreateView
 from django.views.generic.edit import FormView
 from django.views.generic.edit import FormMixin
 from issue_tracker import forms
 from issue_tracker import models as it_models
 from issue_tracker import filters
+from issue_tracker import serializers as it_serializers
 from django.core.urlresolvers import reverse
+
+#For Authentication -DG
+from rest_framework.authtoken.models import Token
+from rest_framework.exceptions import ParseError
+from rest_framework import status
+from rest_framework.response import Response
+from django.contrib.auth.models import User
+from rest_framework.views import APIView
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.permissions import IsAuthenticated
+
+
+
+class AuthView(APIView):
+    """
+    Authentication is needed for this methods
+    """
+    authentication_classes = (TokenAuthentication,)
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request, format=None):
+        return Response({'detail': "I suppose you are authenticated"})
 
 
 class CreateIssue(CreateView):
@@ -96,6 +121,31 @@ class EditIssue(UpdateView):
         return context
 
 
+class CommentList(generics.ListCreateAPIView):
+
+    queryset = it_models.IssueComment.objects.all()
+    serializer_class = it_serializers.CommentSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(poster=self.request.user)
+
+    def post(self, request, *args, **kwargs):
+
+        if 'issue_id' not in request.POST:
+            return HttpResponseBadRequest
+        if 'issue_id' is null in request.POST:
+            return HttpResponseBadRequest
+
+
+
+class CommentDetail(generics.RetrieveUpdateDestroyAPIView):
+
+    model = it_models.IssueComment
+    queryset = it_models.IssueComment.objects.all()
+    serializer_class = it_serializers.CommentSerializer
+
+
+
 class ViewIssue(DetailView, FormMixin):
     model = it_models.Issue
     template_name = 'issue_detail.html'
@@ -113,9 +163,8 @@ class ViewIssue(DetailView, FormMixin):
     def get_success_url(self):
         return reverse('view_issue', kwargs={'pk': self.object.pk})
 
+
     def post(self, request, *args, **kwargs):
-        if not request.user.is_authenticated():
-            return HttpResponseForbidden()
         self.object = self.get_object()
         form_class = self.get_form_class()
         form = self.get_form(form_class)
@@ -123,6 +172,36 @@ class ViewIssue(DetailView, FormMixin):
             return self.form_valid(form)
         else:
             return self.form_invalid(form)
+
+        """
+   # to use token authentication but I can't seem to make it work for now -DG
+       def post(self, request, format=None):
+           try:
+               data = request.DATA
+           except ParseError as error:
+               return Response(
+                   'Invalid JSON - {0}'.format(error.detail),
+                   status=status.HTTP_400_BAD_REQUEST
+               )
+           if "user" not in data or "password" not in data:
+               return Response(
+                   'Wrong credentials',
+                   status=status.HTTP_401_UNAUTHORIZED
+               )
+
+           user = User.objects.first()
+           if not user:
+               return Response(
+                   'No default user, please create one',
+                   status=status.HTTP_404_NOT_FOUND
+               )
+
+           token = Token.objects.get_or_create(user=user)
+
+           return Response({'detail': 'POST answer', 'token': token[0].key})
+   """
+
+
 
     def form_valid(self, form):
         new_comment = form.save(commit=False)
